@@ -1,25 +1,4 @@
-/*
-  Scan
-
-  This example scans for Bluetooth® Low Energy peripherals and prints out their advertising details:
-  address, local name, advertised service UUID's.
-
-  The circuit:
-  - Boards with integrated BLE or Nucleo board plus one of BLE X-Nucleo shield::
-    - B-L475E-IOT01A1
-    - B_L4S5I_IOT01A
-    - STEVAL-MKBOXPRO
-    - STEVAL-MKSBOX1V1,
-    - NUCLEO-WB15CC
-    - P-NUCLEO-WB55RG
-    - STM32WB5MM-DK
-    - X-NUCLEO-IDB05A2
-    - X-NUCLEO-IDB05A1
-    - X-NUCLEO-BNRG2A1
-
-  This example code is in the public domain.
-*/
-
+#include <STM32duinoBLE.h>
 #include <STM32duinoBLE.h>
 
 #if defined(ARDUINO_STEVAL_MKBOXPRO)
@@ -28,7 +7,7 @@ SPIClass SpiHCI(PA7, PA6, PA5);
 HCISpiTransportClass HCISpiTransport(SpiHCI, BLUENRG_LP, PA2, PB11, PD4, 1000000, SPI_MODE3);
 #if !defined(FAKE_BLELOCALDEVICE)
 BLELocalDevice BLEObj(&HCISpiTransport);
-BLELocalDevice& BLE = BLEObj;
+BLELocalDevice &BLE = BLEObj;
 #endif
 #elif defined(ARDUINO_STEVAL_MKSBOX1V1)
 /* STEVAL-MKSBOX1V1 */
@@ -36,7 +15,7 @@ SPIClass SpiHCI(PC3, PD3, PD1);
 HCISpiTransportClass HCISpiTransport(SpiHCI, SPBTLE_1S, PD0, PD4, PA8, 1000000, SPI_MODE1);
 #if !defined(FAKE_BLELOCALDEVICE)
 BLELocalDevice BLEObj(&HCISpiTransport);
-BLELocalDevice& BLE = BLEObj;
+BLELocalDevice &BLE = BLEObj;
 #endif
 #elif defined(ARDUINO_B_L475E_IOT01A) || defined(ARDUINO_B_L4S5I_IOT01A)
 /* B-L475E-IOT01A1 or B_L4S5I_IOT01A */
@@ -44,14 +23,14 @@ SPIClass SpiHCI(PC12, PC11, PC10);
 HCISpiTransportClass HCISpiTransport(SpiHCI, SPBTLE_RF, PD13, PE6, PA8, 8000000, SPI_MODE0);
 #if !defined(FAKE_BLELOCALDEVICE)
 BLELocalDevice BLEObj(&HCISpiTransport);
-BLELocalDevice& BLE = BLEObj;
+BLELocalDevice &BLE = BLEObj;
 #endif
-#elif defined(ARDUINO_NUCLEO_WB15CC) || defined(ARDUINO_P_NUCLEO_WB55RG) ||\
-      defined(ARDUINO_STM32WB5MM_DK) || defined(P_NUCLEO_WB55_USB_DONGLE)
+#elif defined(ARDUINO_NUCLEO_WB15CC) || defined(ARDUINO_P_NUCLEO_WB55RG) || \
+    defined(ARDUINO_STM32WB5MM_DK) || defined(P_NUCLEO_WB55_USB_DONGLE)
 HCISharedMemTransportClass HCISharedMemTransport;
 #if !defined(FAKE_BLELOCALDEVICE)
 BLELocalDevice BLEObj(&HCISharedMemTransport);
-BLELocalDevice& BLE = BLEObj;
+BLELocalDevice &BLE = BLEObj;
 #endif
 #else
 /* Shield IDB05A2 with SPI clock on D3 */
@@ -59,7 +38,7 @@ SPIClass SpiHCI(D11, D12, D3);
 HCISpiTransportClass HCISpiTransport(SpiHCI, BLUENRG_M0, A1, A0, D7, 8000000, SPI_MODE0);
 #if !defined(FAKE_BLELOCALDEVICE)
 BLELocalDevice BLEObj(&HCISpiTransport);
-BLELocalDevice& BLE = BLEObj;
+BLELocalDevice &BLE = BLEObj;
 #endif
 /* Shield IDB05A2 with SPI clock on D13 */
 // #define SpiHCI SPI
@@ -97,66 +76,42 @@ BLELocalDevice& BLE = BLEObj;
 // BLELocalDevice& BLE = BLEObj;
 // #endif
 #endif
+BLEService myService("fff0");
+BLEIntCharacteristic myCharacteristic("fff1", BLERead | BLEBroadcast);
+
+// Advertising parameters should have a global scope. Do NOT define them in 'setup' or in 'loop'
+const uint8_t completeRawAdvertisingData[] = {0x02,0x01,0x06,0x09,0xff,0x01,0x01,0x00,0x01,0x02,0x03,0x04,0x05};   
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(9600);
   while (!Serial);
 
-  // begin initialization
   if (!BLE.begin()) {
-    Serial.println("starting Bluetooth® Low Energy module failed!");
-
+    Serial.println("failed to initialize BLE!");
     while (1);
   }
 
-  Serial.println("Bluetooth® Low Energy Central scan");
+  myService.addCharacteristic(myCharacteristic);
+  BLE.addService(myService);
 
-  // start scanning for peripherals
-  int ret = 1;
-  do
-  {
-    ret = BLE.scan();
-    if (ret == 0)
-    {
-      BLE.end();
-      BLE.begin();
-    }
-  } while(ret == 0);
+  // Build advertising data packet
+  BLEAdvertisingData advData;
+  // If a packet has a raw data parameter, then all the other parameters of the packet will be ignored
+  advData.setRawData(completeRawAdvertisingData, sizeof(completeRawAdvertisingData));  
+  // Copy set parameters in the actual advertising packet
+  BLE.setAdvertisingData(advData);
+
+  // Build scan response data packet
+  BLEAdvertisingData scanData;
+  scanData.setLocalName("Test advertising raw data");
+  // Copy set parameters in the actual scan response packet
+  BLE.setScanResponseData(scanData);
+  
+  BLE.advertise();
+
+  Serial.println("advertising ...");
 }
 
 void loop() {
-  // check if a peripheral has been discovered
-  BLEDevice peripheral = BLE.available();
-
-  if (peripheral) {
-    // discovered a peripheral
-    Serial.println("Discovered a peripheral");
-    Serial.println("-----------------------");
-
-    // print address
-    Serial.print("Address: ");
-    Serial.println(peripheral.address());
-
-    // print the local name, if present
-    if (peripheral.hasLocalName()) {
-      Serial.print("Local Name: ");
-      Serial.println(peripheral.localName());
-    }
-
-    // print the advertised service UUIDs, if present
-    if (peripheral.hasAdvertisedServiceUuid()) {
-      Serial.print("Service UUIDs: ");
-      for (int i = 0; i < peripheral.advertisedServiceUuidCount(); i++) {
-        Serial.print(peripheral.advertisedServiceUuid(i));
-        Serial.print(" ");
-      }
-      Serial.println();
-    }
-
-    // print the RSSI
-    Serial.print("RSSI: ");
-    Serial.println(peripheral.rssi());
-
-    Serial.println();
-  }
+  BLE.poll();
 }
